@@ -114,6 +114,11 @@ class Node:
             node = node.parent
         return list(reversed(path_back))
 
+    def print_path(self):
+        for n in self.path:
+            print(n.state, end=' ')
+        print('\n')
+
     # We want for a queue of nodes in breadth_first_graph_search or
     # astar_search to have no duplicated states, so we treat nodes
     # with the same state as equal. [Problem: this may not be what you
@@ -272,6 +277,9 @@ def best_first_graph_search(problem, f, display=False):
     explored = set()
     while frontier:
         node = frontier.pop()
+        print("Node being tested: " + str(node.state))
+        print(node.path())
+        # print("Frontier: ", frontier)
         if problem.goal_test(node.state):
             if display:
                 print(len(explored), "paths have been expanded and", len(frontier), "paths remain in the frontier")
@@ -421,7 +429,7 @@ def astar_search(problem, h=None, display=False):
 
 
 # ______________________________________________________________________________
-# A* heuristics 
+# A* heuristics
 
 class EightPuzzle(Problem):
     """ The problem of sliding tiles numbered from 1 to 8 on a 3x3 board, where one of the
@@ -487,7 +495,7 @@ class EightPuzzle(Problem):
         return inversion % 2 == 0
 
     def h(self, node):
-        """ Return the heuristic value for a given state. Default heuristic function used is 
+        """ Return the heuristic value for a given state. Default heuristic function used is
         h(n) = number of misplaced tiles """
 
         return sum(s != g for (s, g) in zip(node.state, self.goal))
@@ -673,7 +681,7 @@ def simulated_annealing(problem, schedule=exp_schedule()):
 
 
 def simulated_annealing_full(problem, schedule=exp_schedule()):
-    """ This version returns all the states encountered in reaching 
+    """ This version returns all the states encountered in reaching
     the goal state."""
     states = []
     current = Node(problem.initial)
@@ -1118,6 +1126,12 @@ romania_map.locations = dict(
     Oradea=(131, 571), Pitesti=(320, 368), Rimnicu=(233, 410),
     Sibiu=(207, 457), Timisoara=(94, 410), Urziceni=(456, 350),
     Vaslui=(509, 444), Zerind=(108, 531))
+romania_map.direct_distances = dict(
+    Arad=366, Bucharest=0, Craiova=160, Drobeta=242, Eforie=161,
+    Fagaras=178, Giurgiu=77, Hirsova=151, Iasi=226, Lugoj=244,
+    Mehadia=241, Neamt=234, Oradea=380, Pitesti=98, Rimnicu=193,
+    Sibiu=253, Timisoara=329, Urziceni=80, Vaslui=199, Zerind=174
+)
 
 """ [Figure 4.9]
 Eight possible states of the vacumm world
@@ -1205,12 +1219,17 @@ class GraphProblem(Problem):
 
     def h(self, node):
         """h function is straight-line distance from a node's state to goal."""
-        locs = getattr(self.graph, 'locations', None)
-        if locs:
+        # locs = getattr(self.graph, 'locations', None)
+        dds = getattr(self.graph, 'direct_distances', None)
+        if dds:
             if type(node) is str:
-                return int(distance(locs[node], locs[self.goal]))
+                print(node, dds[node])
+                # return int(distance(locs[node], locs[self.goal]))
+                return dds[node]
 
-            return int(distance(locs[node.state], locs[self.goal]))
+            # return int(distance(locs[node.state], locs[self.goal])) #dds[node.state]
+            print(node, dds[node.state])
+            return dds[node.state]
         else:
             return np.inf
 

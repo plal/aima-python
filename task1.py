@@ -1,4 +1,5 @@
 import heapq
+import argparse
 
 # -------
 # utils
@@ -21,6 +22,22 @@ def memoize(fn, slot=None, maxsize=32):
             return fn(*args)
 
     return memoized_fn
+
+def manhattan(node):
+    state = node.state
+    index_goal = {0:[2,2], 1:[0,0], 2:[0,1], 3:[0,2], 4:[1,0], 5:[1,1], 6:[1,2], 7:[2,0], 8:[2,1]}
+    index_state = {}
+    index = [[0,0], [0,1], [0,2], [1,0], [1,1], [1,2], [2,0], [2,1], [2,2]]
+    x, y = 0, 0
+
+    for i in range(len(state)):
+        index_state[state[i]] = index[i]
+
+    mhd = 0
+
+    for i in range(8):
+        for j in range(2):
+            mhd = abs(index_goal[i][j] - index_state[i][j]) + mhd
 
 class PriorityQueue:
     """A Queue in which the minimum (or maximum) element (as determined by f and
@@ -293,14 +310,82 @@ class GraphProblem(Problem):
             if type(node) is str:
                 # print(node, dds[node], getattr(node, 'path_cost', None))
                 # return int(distance(locs[node], locs[self.goal]))
-                return dds[node]
+                return dds[node][self.goal]
 
             # return int(distance(locs[node.state], locs[self.goal])) #dds[node.state]
             # print(node, dds[node.state], getattr(node, 'path_cost', None))
-            return dds[node.state]
+            return dds[node.state][self.goal]
         else:
             return np.inf
 
+class EightPuzzle(Problem):
+    """ The problem of sliding tiles numbered from 1 to 8 on a 3x3 board, where one of the
+    squares is a blank. A state is represented as a tuple of length 9, where  element at
+    index i represents the tile number  at index i (0 if it's an empty square) """
+
+    def __init__(self, initial, goal=(1, 2, 3, 4, 5, 6, 7, 8, 0)):
+        """ Define goal state and initialize a problem """
+        super().__init__(initial, goal)
+
+    def find_blank_square(self, state):
+        """Return the index of the blank square in a given state"""
+
+        return state.index(0)
+
+    def actions(self, state):
+        """ Return the actions that can be executed in the given state.
+        The result would be a list, since there are only four possible actions
+        in any given state of the environment """
+
+        possible_actions = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+        index_blank_square = self.find_blank_square(state)
+
+        if index_blank_square % 3 == 0:
+            possible_actions.remove('LEFT')
+        if index_blank_square < 3:
+            possible_actions.remove('UP')
+        if index_blank_square % 3 == 2:
+            possible_actions.remove('RIGHT')
+        if index_blank_square > 5:
+            possible_actions.remove('DOWN')
+
+        return possible_actions
+
+    def result(self, state, action):
+        """ Given state and action, return a new state that is the result of the action.
+        Action is assumed to be a valid action in the state """
+
+        # blank is the index of the blank square
+        blank = self.find_blank_square(state)
+        new_state = list(state)
+
+        delta = {'UP': -3, 'DOWN': 3, 'LEFT': -1, 'RIGHT': 1}
+        neighbor = blank + delta[action]
+        new_state[blank], new_state[neighbor] = new_state[neighbor], new_state[blank]
+
+        return tuple(new_state)
+
+    def goal_test(self, state):
+        """ Given a state, return True if state is a goal state or False, otherwise """
+
+        return state == self.goal
+
+    def check_solvability(self, state):
+        """ Checks if the given state is solvable """
+
+        inversion = 0
+        for i in range(len(state)):
+            for j in range(i + 1, len(state)):
+                if (state[i] > state[j]) and state[i] != 0 and state[j] != 0:
+                    inversion += 1
+
+        return inversion % 2 == 0
+
+    def h(self, node):
+        """ Return the heuristic value for a given state. Default heuristic function used is
+        h(n) = number of misplaced tiles """
+
+        return sum(s != g for (s, g) in zip(node.state, self.goal))
 
 # -------
 # search algorithms
@@ -315,11 +400,13 @@ def best_first_graph_search(problem, f, display=False):
     a best first search you can examine the f values of the path returned."""
     f = memoize(f, 'f')
     node = Node(problem.initial)
+    print("Initial node: ", problem.initial, "\n")
     frontier = PriorityQueue('min', f)
     frontier.append(node)
     explored = set()
+    i=1
     while frontier:
-        print("Frontier: ", frontier.heap)
+        print("Frontier on start of iteration", i, ": ", frontier.heap)
         node = frontier.pop()
         print("Node being tested: " + str(node.state))
         print(node.path())
@@ -335,6 +422,8 @@ def best_first_graph_search(problem, f, display=False):
                 if f(child) < frontier[child]:
                     del frontier[child]
                     frontier.append(child)
+        print("Frontier on end of iteration", i, ": ", frontier.heap, "\n")
+        i += 1
     return None
 
 
@@ -370,8 +459,8 @@ romania_map.direct_distances = dict(
     Sibiu=253, Timisoara=329, Urziceni=80, Vaslui=199, Zerind=374
 )
 
-romania_problem = GraphProblem('Arad','Bucharest',romania_map)
-astar_search(romania_problem)
+# romania_problem = GraphProblem('Arad','Bucharest',romania_map)
+# astar_search(romania_problem)
 
 
 metro_map = UndirectedGraph(dict(
@@ -387,21 +476,36 @@ metro_map = UndirectedGraph(dict(
 
 print("\nStarting metro problem\n")
 metro_map.direct_distances = dict(
-    E1 = 27.6,
-    E2 = 19.1,
-    E3 = 12.1,
-    E4 = 10.6,
-    E5 = 14.5,
-    E6 = 15.2,
-    E7 = 12.4,
-    E8 = 22.7,
-    E9 = 21.2,
-    E10 = 18.7,
-    E11 = 31.5,
-    E12 = 28.8,
-    E13 = 0.0,
-    E14 = 5.1,
+    E1  = dict(E1=0,    E2=10,   E3=18.5, E4=24.8, E5=36.4, E6=38.8, E7=35.8, E8=25.4, E9=17.6, E10=9.1,  E11=16.7, E12=27.3, E13=27.6, E14=29.8),
+    E2  = dict(E1=10,   E2=0,    E3=8.5,  E4=14.8, E5=26.6, E6=29.1, E7=26.1, E8=17.3, E9=10,   E10=3.5,  E11=15.5, E12=20.9, E13=19.1, E14=21.8),
+    E3  = dict(E1=18.5, E2=8.5,  E3=0,    E4=6.3,  E5=18.2, E6=20.6, E7=17.6, E8=13.6, E9=9.4,  E10=10.3, E11=19.5, E12=19.1, E13=12.1, E14=16.6),
+    E4  = dict(E1=24.8, E2=14.8, E3=6.3 , E4=0,    E5=12,   E6=14.4, E7=11.5, E8=12.4, E9=12.6, E10=16.7, E11=23.6, E12=18.6, E13=10.6, E14=15.4),
+    E5  = dict(E1=36.4, E2=26.6, E3=18.2, E4=12,   E5=0,    E6=3,    E7=2.4,  E8=19.4, E9=23.3, E10=28.2, E11=34.2, E12=24.8, E13=14.5, E14=17.9),
+    E6  = dict(E1=38.8, E2=29.1, E3=20.6, E4=14.1, E5=3,    E6=0,    E7=3.3,  E8=22.3, E9=25.7, E10=30.3, E11=36.7, E12=27.6, E13=15.2, E14=18.2),
+    E7  = dict(E1=35.8, E2=26.1, E3=17.6, E4=11.5, E5=2.4,  E6=3.3,  E7=0,    E8=20,   E9=23,   E10=27.3, E11=34.2, E12=25.7, E13=12.4, E14=15.6),
+    E8  = dict(E1=25.4, E2=17.3, E3=13.6, E4=12.4, E5=19.4, E6=22.3, E7=20,   E8=0,    E9=8.2,  E10=20.3, E11=16.1, E12=6.4,  E13=22.7, E14=27.6),
+    E9  = dict(E1=17.6, E2=10,   E3=9.4,  E4=12.6, E5=23.3, E6=25.7, E7=23,   E8=8.2,  E9=0,    E10=13.5, E11=11.2, E12=10.9, E13=21.2, E14=26.6),
+    E10 = dict(E1=9.1,  E2=3.5,  E3=10.3, E4=16.7, E5=28.2, E6=30.3, E7=27.3, E8=20.3, E9=13.5, E10=0,    E11=17.6, E12=24.2, E13=18.7, E14=21.2),
+    E11 = dict(E1=16.7, E2=15.5, E3=19.5, E4=23.6, E5=34.2, E6=36.7, E7=34.2, E8=16.1, E9=11.2, E10=17.6, E11=0,    E12=14.2, E13=31.5, E14=35.5),
+    E12 = dict(E1=27.3, E2=20.9, E3=19.1, E4=18.6, E5=24.8, E6=27.6, E7=25.7, E8=6.4,  E9=10.9, E10=24.2, E11=14.2, E12=0,    E13=28.8, E14=33.6),
+    E13 = dict(E1=27.6, E2=19.1, E3=12.1, E4=10.6, E5=14.5, E6=15.2, E7=12.4, E8=22.7, E9=21.2, E10=18.7, E11=31.5, E12=28.8, E13=0,    E14=5.1),
+    E14 = dict(E1=29.8, E2=21.8, E3=16.6, E4=15.4, E5=17.9, E6=18.2, E7=15.6, E8=27.6, E9=26.6, E10=21.2, E11=35.5, E12=33.6, E13=5.1,  E14=0),
 )
 
-metro_problem = GraphProblem('E10','E13',metro_map)
-astar_search(metro_problem)
+ap = argparse.ArgumentParser()
+ap.add_argument("-i", "--initial", required=True, type=str,
+                help="Initial node")
+ap.add_argument("-g", "--goal", required=True, type=str,
+                help="Goal node")
+args = vars(ap.parse_args())
+
+metro_problem = GraphProblem(args["initial"],args["goal"],metro_map)
+search = astar_search(metro_problem)
+print("Path from initial node:", search.solution(), "\n")
+
+
+# print("\nStarting 8-puzzle problem\n")
+# puzzle = EightPuzzle((1,8,2,0,4,3,7,6,5))
+# print(puzzle.check_solvability((1,8,2,0,4,3,7,6,5)))
+# astar_search(puzzle)
+# print(astar_search(puzzle).solution())
